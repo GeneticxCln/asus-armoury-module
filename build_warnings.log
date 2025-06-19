@@ -1,0 +1,12 @@
+make -C /lib/modules/6.15.2-3-cachyos/build M=/home/alex/asus-armoury-module modules
+make[1]: Entering directory '/usr/lib/modules/6.15.2-3-cachyos/build'
+make[2]: Entering directory '/home/alex/asus-armoury-module'
+  CC [M]  asus-armoury.o
+  LD [M]  universal-armoury.o
+  MODPOST Module.symvers
+  CC [M]  universal-armoury.mod.o
+  CC [M]  .module-common.o
+  LD [M]  universal-armoury.ko
+  BTF [M] universal-armoury.ko
+make[2]: Leaving directory '/home/alex/asus-armoury-module'
+make[1]: Leaving directory '/usr/lib/modules/6.15.2-3-cachyos/build'

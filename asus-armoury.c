@@ -15,16 +15,18 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/acpi.h>
-#include <linux/platform_device.h>
-#include <linux/hwmon.h>
-#include <linux/hwmon-sysfs.h>
-#include <linux/leds.h>
-#include <linux/proc_fs.h>
-#include <linux/seq_file.h>
-#include <linux/uaccess.h>
 #include <linux/dmi.h>
-#include <linux/input.h>
-#include <linux/input/sparse-keymap.h>
+#include <linux/version.h>
+
+/* Ensure compatibility with older kernels */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+#error "This module requires Linux kernel 5.4 or newer"
+#endif
+
+/* Compatibility macros for different kernel versions */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0) && !defined(strscpy)
+#define strscpy(dest, src, size) strlcpy(dest, src, size)
+#endif
 
 #define DRIVER_NAME "universal-armoury"
 #define DRIVER_VERSION "2.0.0"
@@ -208,27 +210,21 @@ enum laptop_vendor {
 
 struct universal_armoury {
     struct acpi_device *acpi_dev;
-    struct platform_device *platform_dev;
-    struct device *hwmon_dev;
-    struct input_dev *input_dev;
     
     /* Vendor identification */
     enum laptop_vendor vendor;
     char vendor_name[32];
     char product_name[64];
     
-    /* BIOS settings */
+    /* Feature support flags */
     bool gpu_mux_supported;
     bool dgpu_disable_supported;
     bool egpu_supported;
-    bool power_profile_supported;
-    bool fan_control_supported;
     
     /* Current states */
     int gpu_mux_state;
     int dgpu_disable_state;
     int egpu_state;
-    int power_profile_state;
     
     /* ACPI method names for this vendor */
     const char *get_gpu_mux_method;
