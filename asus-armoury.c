@@ -342,6 +342,11 @@ static int universal_armoury_acpi_evaluate_method(struct acpi_device *adev,
     acpi_status status;
     int ret = 0;
 
+    /* Validate input parameters */
+    if (!adev || !method_name) {
+        return -EINVAL;
+    }
+
     input.count = 1;
     input.pointer = &in_obj;
     in_obj.type = ACPI_TYPE_INTEGER;
@@ -352,10 +357,22 @@ static int universal_armoury_acpi_evaluate_method(struct acpi_device *adev,
 
     if (ACPI_SUCCESS(status)) {
         out_obj = output.pointer;
-        if (out_obj && out_obj->type == ACPI_TYPE_INTEGER && result)
-            *result = (u32)out_obj->integer.value;
-        kfree(output.pointer);
+        if (out_obj) {
+            if (out_obj->type == ACPI_TYPE_INTEGER && result) {
+                *result = (u32)out_obj->integer.value;
+            } else if (out_obj->type != ACPI_TYPE_INTEGER) {
+                dev_warn(&adev->dev, "ACPI method %s returned non-integer type: %d\n",
+                         method_name, out_obj->type);
+                ret = -EPROTO;
+            }
+            kfree(output.pointer);
+        } else {
+            dev_err(&adev->dev, "ACPI method %s returned NULL output\n", method_name);
+            ret = -ENODATA;
+        }
     } else {
+        dev_err(&adev->dev, "ACPI method %s failed with status 0x%x\n",
+                method_name, status);
         ret = -EIO;
     }
 
@@ -381,7 +398,7 @@ static ssize_t gpu_mux_show(struct device *dev,
         return ret;
 
     armoury->gpu_mux_state = result;
-    return sprintf(buf, "%d\n", result);
+    return scnprintf(buf, PAGE_SIZE, "%d\n", result);
 }
 
 static ssize_t gpu_mux_store(struct device *dev,
@@ -395,12 +412,19 @@ static ssize_t gpu_mux_store(struct device *dev,
     if (!armoury || !armoury->gpu_mux_supported || !armoury->set_gpu_mux_method)
         return -ENODEV;
 
-    ret = kstrtoint(buf, 10, &value);
-    if (ret)
-        return ret;
-
-    if (value < 0 || value > 1)
+    if (!buf || count == 0)
         return -EINVAL;
+
+    ret = kstrtoint(buf, 10, &value);
+    if (ret) {
+        dev_err(dev, "Invalid input for gpu_mux: %s\n", buf);
+        return ret;
+    }
+
+    if (value < 0 || value > 1) {
+        dev_err(dev, "gpu_mux value must be 0 or 1, got: %d\n", value);
+        return -EINVAL;
+    }
 
     ret = universal_armoury_acpi_evaluate_method(armoury->acpi_dev,
                                                armoury->set_gpu_mux_method,
@@ -431,7 +455,7 @@ static ssize_t dgpu_disable_show(struct device *dev,
         return ret;
 
     armoury->dgpu_disable_state = result;
-    return sprintf(buf, "%d\n", result);
+    return scnprintf(buf, PAGE_SIZE, "%d\n", result);
 }
 
 static ssize_t dgpu_disable_store(struct device *dev,
@@ -445,12 +469,19 @@ static ssize_t dgpu_disable_store(struct device *dev,
     if (!armoury || !armoury->dgpu_disable_supported || !armoury->set_dgpu_disable_method)
         return -ENODEV;
 
-    ret = kstrtoint(buf, 10, &value);
-    if (ret)
-        return ret;
-
-    if (value < 0 || value > 1)
+    if (!buf || count == 0)
         return -EINVAL;
+
+    ret = kstrtoint(buf, 10, &value);
+    if (ret) {
+        dev_err(dev, "Invalid input for dgpu_disable: %s\n", buf);
+        return ret;
+    }
+
+    if (value < 0 || value > 1) {
+        dev_err(dev, "dgpu_disable value must be 0 or 1, got: %d\n", value);
+        return -EINVAL;
+    }
 
     ret = universal_armoury_acpi_evaluate_method(armoury->acpi_dev,
                                                armoury->set_dgpu_disable_method,
@@ -481,7 +512,7 @@ static ssize_t egpu_enable_show(struct device *dev,
         return ret;
 
     armoury->egpu_state = result;
-    return sprintf(buf, "%d\n", result);
+    return scnprintf(buf, PAGE_SIZE, "%d\n", result);
 }
 
 static ssize_t egpu_enable_store(struct device *dev,
@@ -495,12 +526,19 @@ static ssize_t egpu_enable_store(struct device *dev,
     if (!armoury || !armoury->egpu_supported || !armoury->set_egpu_enable_method)
         return -ENODEV;
 
-    ret = kstrtoint(buf, 10, &value);
-    if (ret)
-        return ret;
-
-    if (value < 0 || value > 1)
+    if (!buf || count == 0)
         return -EINVAL;
+
+    ret = kstrtoint(buf, 10, &value);
+    if (ret) {
+        dev_err(dev, "Invalid input for egpu_enable: %s\n", buf);
+        return ret;
+    }
+
+    if (value < 0 || value > 1) {
+        dev_err(dev, "egpu_enable value must be 0 or 1, got: %d\n", value);
+        return -EINVAL;
+    }
 
     ret = universal_armoury_acpi_evaluate_method(armoury->acpi_dev,
                                                armoury->set_egpu_enable_method,
@@ -524,8 +562,8 @@ static ssize_t vendor_show(struct device *dev,
     struct acpi_device *adev = to_acpi_device(dev);
     struct universal_armoury *armoury = adev->driver_data;
     if (!armoury || !armoury->vendor_name[0])
-        return sprintf(buf, "Unknown\n");
-    return sprintf(buf, "%s\n", armoury->vendor_name);
+        return scnprintf(buf, PAGE_SIZE, "Unknown\n");
+    return scnprintf(buf, PAGE_SIZE, "%s\n", armoury->vendor_name);
 }
 
 static ssize_t product_show(struct device *dev,
@@ -534,8 +572,8 @@ static ssize_t product_show(struct device *dev,
     struct acpi_device *adev = to_acpi_device(dev);
     struct universal_armoury *armoury = adev->driver_data;
     if (!armoury || !armoury->product_name[0])
-        return sprintf(buf, "Unknown\n");
-    return sprintf(buf, "%s\n", armoury->product_name);
+        return scnprintf(buf, PAGE_SIZE, "Unknown\n");
+    return scnprintf(buf, PAGE_SIZE, "%s\n", armoury->product_name);
 }
 
 static ssize_t supported_features_show(struct device *dev,
@@ -544,8 +582,8 @@ static ssize_t supported_features_show(struct device *dev,
     struct acpi_device *adev = to_acpi_device(dev);
     struct universal_armoury *armoury = adev->driver_data;
     if (!armoury)
-        return sprintf(buf, "gpu_mux:0 dgpu_disable:0 egpu_enable:0\n");
-    return sprintf(buf, "gpu_mux:%d dgpu_disable:%d egpu_enable:%d\n",
+        return scnprintf(buf, PAGE_SIZE, "gpu_mux:0 dgpu_disable:0 egpu_enable:0\n");
+    return scnprintf(buf, PAGE_SIZE, "gpu_mux:%d dgpu_disable:%d egpu_enable:%d\n",
                    armoury->gpu_mux_supported,
                    armoury->dgpu_disable_supported,
                    armoury->egpu_supported);
@@ -636,11 +674,11 @@ static void universal_armoury_probe_features(struct universal_armoury *armoury)
     }
 
     if (!armoury->gpu_mux_supported && !armoury->dgpu_disable_supported && !armoury->egpu_supported) {
-        dev_warn(&armoury->acpi_dev->dev, "No supported features found. Trying alternative ACPI methods...\n");
-        
         /* Try alternative/generic ACPI methods */
         const char *alt_methods[] = {"GMUX", "_GPU", "DGPU", "SGPU", "MXDS", "MXDM", NULL};
         int i;
+        
+        dev_warn(&armoury->acpi_dev->dev, "No supported features found. Trying alternative ACPI methods...\n");
         
         for (i = 0; alt_methods[i]; i++) {
             if (!universal_armoury_acpi_evaluate_method(armoury->acpi_dev,
